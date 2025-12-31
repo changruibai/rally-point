@@ -2,20 +2,22 @@
 
 import React, { useState, useCallback } from 'react';
 import type { DeparturePoint, Destination, TravelMode, Coordinate } from '@/types';
-import { 
-  MapPin, 
-  Car, 
-  Train, 
-  Footprints, 
-  Plus, 
-  Trash2, 
+import {
+  MapPin,
+  Car,
+  Train,
+  Footprints,
+  Plus,
+  Trash2,
   Search,
   Loader2,
   User,
   Flag,
-  Navigation
+  Navigation,
+  MapPinned
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { searchAutoComplete, POISearchResult } from '@/lib/map';
 
 interface LocationInputProps {
   departures: DeparturePoint[];
@@ -65,11 +67,11 @@ const PRESET_LOCATIONS = [
 ];
 
 // 目的地颜色配置
-const DESTINATION_COLOR = { 
-  bg: 'bg-emerald-500', 
-  light: 'bg-emerald-100', 
-  text: 'text-emerald-600', 
-  border: 'border-emerald-300' 
+const DESTINATION_COLOR = {
+  bg: 'bg-emerald-500',
+  light: 'bg-emerald-100',
+  text: 'text-emerald-600',
+  border: 'border-emerald-300'
 };
 
 type AddingType = 'departure' | 'destination' | null;
@@ -88,8 +90,10 @@ const LocationInput: React.FC<LocationInputProps> = ({
   const [newAddress, setNewAddress] = useState('');
   const [newMode, setNewMode] = useState<TravelMode>('driving');
   const [isSearching, setIsSearching] = useState(false);
-  const [searchResults, setSearchResults] = useState<typeof PRESET_LOCATIONS>([]);
+  const [searchResults, setSearchResults] = useState<(typeof PRESET_LOCATIONS[0] | POISearchResult)[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<{ address: string; coordinate: Coordinate } | null>(null);
+  const [useRealAPI, setUseRealAPI] = useState(true);
+  const searchTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
   // 生成自定义位置的坐标（基于北京中心点随机偏移）
   const generateCustomCoordinate = useCallback((address: string): Coordinate => {
@@ -103,32 +107,53 @@ const LocationInput: React.FC<LocationInputProps> = ({
     };
   }, []);
 
-  // 搜索位置
-  const handleSearch = useCallback((query: string) => {
+  // 搜索位置（支持高德 API 和本地预设）
+  const handleSearch = useCallback(async (query: string) => {
     setNewAddress(query);
     setSelectedLocation(null);
-    
+
     if (query.length < 2) {
       setSearchResults([]);
       return;
     }
 
+    // 清除之前的搜索定时器
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
     setIsSearching(true);
-    
-    // 模拟搜索延迟
-    setTimeout(() => {
-      const results = PRESET_LOCATIONS.filter(
+
+    // 添加防抖
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        // 先尝试使用高德 API 搜索
+        if (useRealAPI) {
+          const apiResults = await searchAutoComplete(query, '北京');
+          if (apiResults.length > 0) {
+            setSearchResults(apiResults);
+            setIsSearching(false);
+            return;
+          }
+        }
+      } catch (error) {
+        console.warn('API search failed, falling back to local search:', error);
+        setUseRealAPI(false);
+      }
+
+      // 如果 API 搜索失败或没有结果，使用本地预设搜索
+      const localResults = PRESET_LOCATIONS.filter(
         loc => loc.name.includes(query) || loc.address.includes(query)
       );
-      setSearchResults(results);
+      setSearchResults(localResults);
       setIsSearching(false);
     }, 300);
-  }, []);
+  }, [useRealAPI]);
 
   // 使用自定义地址
   const handleUseCustomAddress = useCallback(() => {
     if (newAddress.trim().length < 2) return;
-    
+
     const coordinate = generateCustomCoordinate(newAddress);
     setSelectedLocation({
       address: newAddress.trim(),
@@ -138,14 +163,15 @@ const LocationInput: React.FC<LocationInputProps> = ({
   }, [newAddress, generateCustomCoordinate]);
 
   // 选择搜索结果
-  const handleSelectLocation = useCallback((location: typeof PRESET_LOCATIONS[0]) => {
-    setNewAddress(location.address);
+  const handleSelectLocation = useCallback((location: typeof PRESET_LOCATIONS[0] | POISearchResult) => {
+    const address = location.address || ('district' in location ? location.district : '');
+    setNewAddress(address);
     setSelectedLocation({
-      address: location.address,
+      address: address,
       coordinate: location.coordinate,
     });
     setSearchResults([]);
-    
+
     // 自动填充名称
     if (!newName) {
       setNewName(location.name);
@@ -174,7 +200,7 @@ const LocationInput: React.FC<LocationInputProps> = ({
       };
       onAddDestination(newDestination);
     }
-    
+
     // 重置表单
     setNewName('');
     setNewAddress('');
@@ -248,7 +274,7 @@ const LocationInput: React.FC<LocationInputProps> = ({
                       <User className="w-4 h-4 text-slate-400" />
                     </div>
                     <p className="text-sm text-slate-500 truncate">{dep.address}</p>
-                    
+
                     {/* 出行方式选择 */}
                     <div className="flex items-center gap-2 mt-3">
                       {TRAVEL_MODES.map((mode) => {
@@ -414,8 +440,8 @@ const LocationInput: React.FC<LocationInputProps> = ({
       {addingType !== null && (
         <div className={clsx(
           'p-4 rounded-xl border-2 border-dashed',
-          addingType === 'departure' 
-            ? 'border-primary-300 bg-primary-50/50' 
+          addingType === 'departure'
+            ? 'border-primary-300 bg-primary-50/50'
             : 'border-emerald-300 bg-emerald-50/50'
         )}>
           <div className="flex items-center gap-2 mb-4">
@@ -431,7 +457,7 @@ const LocationInput: React.FC<LocationInputProps> = ({
               </>
             )}
           </div>
-          
+
           <div className="space-y-4">
             {/* 名称输入 */}
             <div>
@@ -468,28 +494,60 @@ const LocationInput: React.FC<LocationInputProps> = ({
 
               {/* 搜索结果下拉 */}
               {(searchResults.length > 0 || (newAddress.length >= 2 && !isSearching)) && !selectedLocation && (
-                <div className="absolute z-10 w-full mt-1 bg-white rounded-lg shadow-lg border border-slate-200 max-h-60 overflow-y-auto">
-                  {searchResults.map((loc) => (
-                    <button
-                      key={loc.name}
-                      onClick={() => handleSelectLocation(loc)}
-                      className="w-full px-4 py-3 text-left hover:bg-slate-50 transition-colors border-b border-slate-100"
-                    >
-                      <div className="font-medium text-slate-800">{loc.name}</div>
-                      <div className="text-sm text-slate-500">{loc.address}</div>
-                    </button>
-                  ))}
-                  {/* 使用自定义地址选项 */}
-                  <button
-                    onClick={handleUseCustomAddress}
-                    className="w-full px-4 py-3 text-left hover:bg-primary-50 transition-colors border-t border-slate-200 bg-slate-50"
-                  >
-                    <div className="font-medium text-primary-600 flex items-center gap-2">
-                      <MapPin className="w-4 h-4" />
-                      使用「{newAddress}」作为地址
+                <div className="absolute z-10 w-full mt-1 bg-white rounded-lg shadow-lg border border-slate-200 max-h-72 overflow-y-auto">
+                  {searchResults.length > 0 && (
+                    <div className="px-3 py-2 text-xs text-slate-400 bg-slate-50 border-b border-slate-100 flex items-center gap-1">
+                      <MapPinned className="w-3 h-3" />
+                      找到 {searchResults.length} 个位置
                     </div>
-                    <div className="text-sm text-slate-500">系统将自动估算位置</div>
-                  </button>
+                  )}
+                  {searchResults.map((loc, index) => {
+                    const district = 'district' in loc ? loc.district : '';
+                    const displayAddress = loc.address || district;
+                    return (
+                      <button
+                        key={`${loc.name}-${index}`}
+                        onClick={() => handleSelectLocation(loc)}
+                        className="w-full px-4 py-3 text-left hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0"
+                      >
+                        <div className="font-medium text-slate-800 flex items-center gap-2">
+                          <MapPin className="w-4 h-4 text-primary-500 shrink-0" />
+                          <span className="truncate">{loc.name}</span>
+                          {district && (
+                            <span className="text-xs text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded shrink-0">
+                              {district}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-sm text-slate-500 mt-0.5 pl-6 truncate">{displayAddress}</div>
+                      </button>
+                    );
+                  })}
+                  {/* 使用自定义地址选项 */}
+                  {searchResults.length === 0 && newAddress.length >= 2 && (
+                    <button
+                      onClick={handleUseCustomAddress}
+                      className="w-full px-4 py-3 text-left hover:bg-primary-50 transition-colors bg-slate-50"
+                    >
+                      <div className="font-medium text-primary-600 flex items-center gap-2">
+                        <MapPin className="w-4 h-4" />
+                        使用「{newAddress}」作为地址
+                      </div>
+                      <div className="text-sm text-slate-500">系统将自动估算位置</div>
+                    </button>
+                  )}
+                  {searchResults.length > 0 && (
+                    <button
+                      onClick={handleUseCustomAddress}
+                      className="w-full px-4 py-3 text-left hover:bg-amber-50 transition-colors border-t border-slate-200 bg-amber-50/50"
+                    >
+                      <div className="font-medium text-amber-600 flex items-center gap-2">
+                        <MapPin className="w-4 h-4" />
+                        搜不到？直接使用「{newAddress}」
+                      </div>
+                      <div className="text-sm text-slate-500">位置将基于关键词估算</div>
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -498,8 +556,8 @@ const LocationInput: React.FC<LocationInputProps> = ({
             {selectedLocation && (
               <div className={clsx(
                 'flex items-center gap-2 text-sm px-3 py-2 rounded-lg',
-                addingType === 'departure' 
-                  ? 'text-primary-600 bg-primary-50' 
+                addingType === 'departure'
+                  ? 'text-primary-600 bg-primary-50'
                   : 'text-emerald-600 bg-emerald-50'
               )}>
                 <MapPin className="w-4 h-4" />

@@ -1,26 +1,33 @@
 'use client';
 
-import React from 'react';
-import type { MeetingPlan, TravelMode } from '@/types';
-import { 
-  Target, 
-  Clock, 
-  MapPin, 
-  Car, 
-  Train, 
+import React, { useState } from 'react';
+import type { MeetingPlan, TravelMode, TransitSegment, TransitPlan, TransitType } from '@/types';
+import {
+  Target,
+  Clock,
+  MapPin,
+  Car,
+  Train,
   Footprints,
   Check,
   AlertCircle,
   Copy,
   ChevronRight,
+  ChevronDown,
   Trophy,
   Medal,
   Award,
   Flag,
-  ArrowRight
+  ArrowRight,
+  Bus,
+  CircleDot,
+  Navigation,
+  ExternalLink,
+  Map
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { formatDuration, formatDistance } from '@/lib/algorithm';
+import { generateAmapNavUrl, generateBaiduNavUrl, generateQQMapNavUrl } from '@/lib/map';
 
 interface PlanCardProps {
   plan: MeetingPlan;
@@ -29,11 +36,104 @@ interface PlanCardProps {
   onSelect: () => void;
 }
 
+// 单独的导航按钮组件
+const NavButton: React.FC<{
+  coordinate: { lng: number; lat: number };
+  name: string;
+  originCoordinate?: { lng: number; lat: number };
+  originName?: string;
+  size?: 'sm' | 'md';
+}> = ({ coordinate, name, originCoordinate, originName, size = 'sm' }) => {
+  const [showMenu, setShowMenu] = useState(false);
+
+  const openNav = (e: React.MouseEvent, type: 'amap' | 'baidu' | 'qqmap') => {
+    e.stopPropagation();
+    let url = '';
+
+    switch (type) {
+      case 'amap':
+        url = generateAmapNavUrl(coordinate, name, originCoordinate, originName);
+        break;
+      case 'baidu':
+        url = generateBaiduNavUrl(coordinate, name);
+        break;
+      case 'qqmap':
+        url = generateQQMapNavUrl(coordinate, name);
+        break;
+    }
+
+    window.open(url, '_blank');
+    setShowMenu(false);
+  };
+
+  return (
+    <div className="relative">
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          setShowMenu(!showMenu);
+        }}
+        className={clsx(
+          "flex items-center gap-1 text-primary-600 hover:text-primary-700 hover:bg-primary-50 rounded transition-colors",
+          size === 'sm' ? 'text-xs px-1.5 py-0.5' : 'text-sm px-2 py-1'
+        )}
+      >
+        <Navigation className={size === 'sm' ? 'w-3 h-3' : 'w-4 h-4'} />
+        <span>导航</span>
+      </button>
+
+      {showMenu && (
+        <div className="absolute bottom-full right-0 mb-1 bg-white rounded-lg shadow-lg border border-slate-200 py-1 min-w-[120px] z-30">
+          <button
+            onClick={(e) => openNav(e, 'amap')}
+            className="w-full px-3 py-1.5 text-left text-xs text-slate-700 hover:bg-primary-50 hover:text-primary-600 flex items-center gap-1.5"
+          >
+            <Map className="w-3 h-3" />
+            高德地图
+          </button>
+          <button
+            onClick={(e) => openNav(e, 'baidu')}
+            className="w-full px-3 py-1.5 text-left text-xs text-slate-700 hover:bg-primary-50 hover:text-primary-600 flex items-center gap-1.5"
+          >
+            <Map className="w-3 h-3" />
+            百度地图
+          </button>
+          <button
+            onClick={(e) => openNav(e, 'qqmap')}
+            className="w-full px-3 py-1.5 text-left text-xs text-slate-700 hover:bg-primary-50 hover:text-primary-600 flex items-center gap-1.5"
+          >
+            <Map className="w-3 h-3" />
+            腾讯地图
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // 出行方式图标
 const TRAVEL_MODE_ICONS: Record<TravelMode, React.ElementType> = {
   driving: Car,
   transit: Train,
   walking: Footprints,
+};
+
+// 公交类型图标
+const TRANSIT_TYPE_ICONS: Record<TransitType, React.ElementType> = {
+  subway: Train,
+  bus: Bus,
+  walk: Footprints,
+  railway: Train,
+  taxi: Car,
+};
+
+// 公交类型标签
+const TRANSIT_TYPE_LABELS: Record<TransitType, string> = {
+  subway: '地铁',
+  bus: '公交',
+  walk: '步行',
+  railway: '火车',
+  taxi: '打车',
 };
 
 // 排名徽章
@@ -43,15 +143,156 @@ const RANK_BADGES = [
   { icon: Award, color: 'from-orange-300 to-orange-400', label: '备选B' },
 ];
 
+// 公交段落组件
+const TransitSegmentItem: React.FC<{ segment: TransitSegment }> = ({ segment }) => {
+  const Icon = TRANSIT_TYPE_ICONS[segment.type] || CircleDot;
+
+  // 步行段简化显示
+  if (segment.type === 'walk') {
+    if (segment.distance < 100) return null; // 太短的步行不显示
+    return (
+      <div className="flex items-center gap-1.5 text-xs text-slate-400">
+        <Footprints className="w-3 h-3" />
+        <span>步行{Math.round(segment.distance)}米</span>
+      </div>
+    );
+  }
+
+  // 地铁/公交段
+  const bgColor = segment.type === 'subway'
+    ? 'bg-blue-50'
+    : segment.type === 'bus'
+      ? 'bg-green-50'
+      : 'bg-slate-50';
+
+  return (
+    <div className={clsx('flex items-center gap-2 px-2 py-1.5 rounded-lg', bgColor)}>
+      <div
+        className="w-5 h-5 rounded flex items-center justify-center shrink-0"
+        style={{ backgroundColor: segment.color || '#0078D7' }}
+      >
+        <Icon className="w-3 h-3 text-white" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-xs font-medium text-slate-700 truncate">
+          {segment.lineName}
+        </div>
+        {segment.startStation && segment.endStation && (
+          <div className="text-[10px] text-slate-500 truncate">
+            {segment.startStation} → {segment.endStation}
+            {segment.stationCount && ` (${segment.stationCount}站)`}
+          </div>
+        )}
+      </div>
+      <div className="text-xs text-slate-500 shrink-0">
+        {segment.duration}分钟
+      </div>
+    </div>
+  );
+};
+
+// 公交方案详情组件
+const TransitPlanDetail: React.FC<{ plan: TransitPlan }> = ({ plan }) => {
+  // 过滤掉太短的步行段
+  const significantSegments = plan.segments.filter(
+    s => s.type !== 'walk' || s.distance >= 100
+  );
+
+  if (significantSegments.length === 0) return null;
+
+  return (
+    <div className="space-y-1.5 mt-2">
+      {significantSegments.map((segment, idx) => (
+        <TransitSegmentItem key={idx} segment={segment} />
+      ))}
+      {plan.walkingDistance > 500 && (
+        <div className="text-[10px] text-slate-400 flex items-center gap-1">
+          <Footprints className="w-3 h-3" />
+          总步行约{Math.round(plan.walkingDistance)}米
+        </div>
+      )}
+    </div>
+  );
+};
+
+// 公交方案摘要（单行显示）
+const TransitPlanSummary: React.FC<{ plan: TransitPlan }> = ({ plan }) => {
+  const transitSegments = plan.segments.filter(s => s.type !== 'walk');
+
+  return (
+    <div className="flex items-center gap-1 flex-wrap">
+      {transitSegments.map((segment, idx) => {
+        const Icon = TRANSIT_TYPE_ICONS[segment.type] || CircleDot;
+        return (
+          <React.Fragment key={idx}>
+            {idx > 0 && <ChevronRight className="w-3 h-3 text-slate-300" />}
+            <div
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-white"
+              style={{ backgroundColor: segment.color || '#0078D7' }}
+            >
+              <Icon className="w-3 h-3" />
+              <span className="truncate max-w-[80px]">{segment.lineName}</span>
+            </div>
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+};
+
 const PlanCard: React.FC<PlanCardProps> = ({ plan, rank, isSelected, onSelect }) => {
   const badge = RANK_BADGES[rank] || RANK_BADGES[2];
   const BadgeIcon = badge.icon;
+  const [expandedRoutes, setExpandedRoutes] = useState<Set<string>>(new Set());
+  const [showNavMenu, setShowNavMenu] = useState(false);
+
+  // 切换路线详情展开状态
+  const toggleRouteExpand = (e: React.MouseEvent, routeId: string) => {
+    e.stopPropagation();
+    setExpandedRoutes(prev => {
+      const next = new Set(prev);
+      if (next.has(routeId)) {
+        next.delete(routeId);
+      } else {
+        next.add(routeId);
+      }
+      return next;
+    });
+  };
 
   // 复制地址
   const handleCopyAddress = (e: React.MouseEvent) => {
     e.stopPropagation();
     const text = `${plan.name}\n地址：${plan.address || '待确认'}\n坐标：${plan.coordinate.lng.toFixed(6)}, ${plan.coordinate.lat.toFixed(6)}`;
     navigator.clipboard.writeText(text);
+  };
+
+  // 导航按钮点击
+  const handleNavClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowNavMenu(!showNavMenu);
+  };
+
+  // 打开导航
+  const openNavigation = (e: React.MouseEvent, type: 'amap' | 'baidu' | 'qqmap') => {
+    e.stopPropagation();
+    const destName = plan.name || plan.address || '汇合点';
+    let url = '';
+
+    switch (type) {
+      case 'amap':
+        url = generateAmapNavUrl(plan.coordinate, destName);
+        break;
+      case 'baidu':
+        url = generateBaiduNavUrl(plan.coordinate, destName);
+        break;
+      case 'qqmap':
+        url = generateQQMapNavUrl(plan.coordinate, destName);
+        break;
+    }
+
+    window.open(url, '_blank');
+    setShowNavMenu(false);
   };
 
   return (
@@ -123,19 +364,73 @@ const PlanCard: React.FC<PlanCardProps> = ({ plan, rank, isSelected, onSelect })
         </div>
         {plan.routes.map((route) => {
           const ModeIcon = TRAVEL_MODE_ICONS[route.travelMode];
+          const hasTransitPlan = route.transitPlan && route.transitPlan.segments.length > 0;
+          const isExpanded = expandedRoutes.has(route.departureId);
+
           return (
             <div
               key={route.departureId}
-              className="flex items-center justify-between py-2 px-3 bg-slate-50 rounded-lg"
+              className="bg-slate-50 rounded-lg overflow-hidden"
             >
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-slate-700">{route.departureName}</span>
-                <ModeIcon className="w-4 h-4 text-slate-400" />
+              {/* 路线摘要 */}
+              <div
+                className={clsx(
+                  "flex items-center justify-between py-2 px-3",
+                  hasTransitPlan && "cursor-pointer hover:bg-slate-100 transition-colors"
+                )}
+                onClick={hasTransitPlan ? (e) => toggleRouteExpand(e, route.departureId) : undefined}
+              >
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <span className="font-medium text-slate-700 shrink-0">{route.departureName}</span>
+                  <ModeIcon className="w-4 h-4 text-slate-400 shrink-0" />
+
+                  {/* 公交方案摘要 */}
+                  {hasTransitPlan && !isExpanded && (
+                    <div className="min-w-0 flex-1">
+                      <TransitPlanSummary plan={route.transitPlan!} />
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 text-sm shrink-0">
+                  <span className="text-slate-500">{formatDistance(route.distance)}</span>
+                  <span className="font-semibold text-slate-800">{formatDuration(route.duration)}</span>
+
+                  {/* 导航按钮 */}
+                  <NavButton
+                    coordinate={plan.coordinate}
+                    name={plan.name || '汇合点'}
+                    size="sm"
+                  />
+
+                  {hasTransitPlan && (
+                    <ChevronDown
+                      className={clsx(
+                        "w-4 h-4 text-slate-400 transition-transform",
+                        isExpanded && "rotate-180"
+                      )}
+                    />
+                  )}
+                </div>
               </div>
-              <div className="flex items-center gap-3 text-sm">
-                <span className="text-slate-500">{formatDistance(route.distance)}</span>
-                <span className="font-semibold text-slate-800">{formatDuration(route.duration)}</span>
-              </div>
+
+              {/* 展开的详细路线 */}
+              {hasTransitPlan && isExpanded && (
+                <div className="px-3 pb-3 border-t border-slate-200">
+                  <TransitPlanDetail plan={route.transitPlan!} />
+                </div>
+              )}
+
+              {/* 驾车信息 */}
+              {route.drivingRoute && (
+                <div className="px-3 pb-2 text-xs text-slate-500 flex items-center gap-3">
+                  {route.drivingRoute.tolls !== undefined && route.drivingRoute.tolls > 0 && (
+                    <span>过路费约¥{route.drivingRoute.tolls}</span>
+                  )}
+                  {route.drivingRoute.trafficLights !== undefined && (
+                    <span>{route.drivingRoute.trafficLights}个红绿灯</span>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}
@@ -148,21 +443,57 @@ const PlanCard: React.FC<PlanCardProps> = ({ plan, rank, isSelected, onSelect })
             <Flag className="w-4 h-4" />
             到目的地
           </div>
-          {plan.destinationRoutes.map((route) => (
-            <div
-              key={route.destinationId}
-              className="flex items-center justify-between py-2 px-3 bg-emerald-50 rounded-lg"
-            >
-              <div className="flex items-center gap-2">
-                <ArrowRight className="w-4 h-4 text-emerald-500" />
-                <span className="font-medium text-emerald-700">{route.destinationName}</span>
+          {plan.destinationRoutes.map((route) => {
+            const hasTransitPlan = route.transitPlan && route.transitPlan.segments.length > 0;
+            const destRouteId = `dest-${route.destinationId}`;
+            const isExpanded = expandedRoutes.has(destRouteId);
+
+            return (
+              <div
+                key={route.destinationId}
+                className="bg-emerald-50 rounded-lg overflow-hidden"
+              >
+                <div
+                  className={clsx(
+                    "flex items-center justify-between py-2 px-3",
+                    hasTransitPlan && "cursor-pointer hover:bg-emerald-100 transition-colors"
+                  )}
+                  onClick={hasTransitPlan ? (e) => toggleRouteExpand(e, destRouteId) : undefined}
+                >
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <ArrowRight className="w-4 h-4 text-emerald-500 shrink-0" />
+                    <span className="font-medium text-emerald-700 shrink-0">{route.destinationName}</span>
+
+                    {/* 公交方案摘要 */}
+                    {hasTransitPlan && !isExpanded && (
+                      <div className="min-w-0 flex-1">
+                        <TransitPlanSummary plan={route.transitPlan!} />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 text-sm shrink-0">
+                    <span className="text-emerald-600">{formatDistance(route.distance)}</span>
+                    <span className="font-semibold text-emerald-700">{formatDuration(route.duration)}</span>
+                    {hasTransitPlan && (
+                      <ChevronDown
+                        className={clsx(
+                          "w-4 h-4 text-emerald-400 transition-transform",
+                          isExpanded && "rotate-180"
+                        )}
+                      />
+                    )}
+                  </div>
+                </div>
+
+                {/* 展开的详细路线 */}
+                {hasTransitPlan && isExpanded && (
+                  <div className="px-3 pb-3 border-t border-emerald-200">
+                    <TransitPlanDetail plan={route.transitPlan!} />
+                  </div>
+                )}
               </div>
-              <div className="flex items-center gap-3 text-sm">
-                <span className="text-emerald-600">{formatDistance(route.distance)}</span>
-                <span className="font-semibold text-emerald-700">{formatDuration(route.duration)}</span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -192,13 +523,57 @@ const PlanCard: React.FC<PlanCardProps> = ({ plan, rank, isSelected, onSelect })
 
       {/* 底部操作 */}
       <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-100">
-        <button
-          onClick={handleCopyAddress}
-          className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-primary-500 transition-colors"
-        >
-          <Copy className="w-4 h-4" />
-          复制地址
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleCopyAddress}
+            className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-primary-500 transition-colors"
+          >
+            <Copy className="w-4 h-4" />
+            复制
+          </button>
+
+          {/* 导航按钮 */}
+          <div className="relative">
+            <button
+              onClick={handleNavClick}
+              className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-primary-500 transition-colors"
+            >
+              <Navigation className="w-4 h-4" />
+              导航
+            </button>
+
+            {/* 导航菜单 */}
+            {showNavMenu && (
+              <div className="absolute bottom-full left-0 mb-2 bg-white rounded-lg shadow-lg border border-slate-200 py-1 min-w-[140px] z-20">
+                <button
+                  onClick={(e) => openNavigation(e, 'amap')}
+                  className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-primary-50 hover:text-primary-600 flex items-center gap-2 transition-colors"
+                >
+                  <Map className="w-4 h-4" />
+                  高德地图
+                  <ExternalLink className="w-3 h-3 ml-auto text-slate-400" />
+                </button>
+                <button
+                  onClick={(e) => openNavigation(e, 'baidu')}
+                  className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-primary-50 hover:text-primary-600 flex items-center gap-2 transition-colors"
+                >
+                  <Map className="w-4 h-4" />
+                  百度地图
+                  <ExternalLink className="w-3 h-3 ml-auto text-slate-400" />
+                </button>
+                <button
+                  onClick={(e) => openNavigation(e, 'qqmap')}
+                  className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-primary-50 hover:text-primary-600 flex items-center gap-2 transition-colors"
+                >
+                  <Map className="w-4 h-4" />
+                  腾讯地图
+                  <ExternalLink className="w-3 h-3 ml-auto text-slate-400" />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
         <div className={clsx(
           'flex items-center gap-1 text-sm font-medium transition-colors',
           isSelected ? 'text-primary-500' : 'text-slate-400'
@@ -213,8 +588,8 @@ const PlanCard: React.FC<PlanCardProps> = ({ plan, rank, isSelected, onSelect })
         <div className={clsx(
           'px-2 py-1 rounded-full text-xs font-bold',
           plan.score >= 70 ? 'bg-green-100 text-green-700' :
-          plan.score >= 50 ? 'bg-amber-100 text-amber-700' :
-          'bg-slate-100 text-slate-600'
+            plan.score >= 50 ? 'bg-amber-100 text-amber-700' :
+              'bg-slate-100 text-slate-600'
         )}>
           {plan.score}分
         </div>

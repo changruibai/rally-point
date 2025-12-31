@@ -3,9 +3,11 @@ import type { AMapInstance, AMapMap, AMapGeocoder, Coordinate } from '@/types';
 let AMap: AMapInstance | null = null;
 let mapInstance: AMapMap | null = null;
 
-// 高德地图 Key（请替换为你自己的 Key）
-// 申请地址：https://console.amap.com/dev/key/app
-export const AMAP_KEY = '你的高德地图Key';
+// 高德地图 Key
+// 优先使用环境变量，如果没有则使用默认值
+export const AMAP_KEY = typeof window !== 'undefined' 
+  ? (process.env.NEXT_PUBLIC_AMAP_KEY || 'ba543da123648e2dae27d91c7015bc55')
+  : 'ba543da123648e2dae27d91c7015bc55';
 export const AMAP_VERSION = '2.0';
 
 // 加载高德地图 SDK
@@ -22,7 +24,7 @@ export async function loadAMapSDK(): Promise<AMapInstance> {
 
     // 动态加载脚本
     const script = document.createElement('script');
-    script.src = `https://webapi.amap.com/maps?v=${AMAP_VERSION}&key=${AMAP_KEY}&plugin=AMap.Geocoder,AMap.Driving,AMap.Transfer,AMap.Walking`;
+    script.src = `https://webapi.amap.com/maps?v=${AMAP_VERSION}&key=${AMAP_KEY}&plugin=AMap.Geocoder,AMap.Driving,AMap.Transfer,AMap.Walking,AMap.PlaceSearch,AMap.AutoComplete`;
     script.async = true;
     script.onload = () => {
       AMap = (window as unknown as { AMap: AMapInstance }).AMap;
@@ -161,5 +163,198 @@ export function getMockAddress(coordinate: Coordinate): string {
   const number = Math.abs(Math.floor((coordinate.lng + coordinate.lat) * 100)) % 200 + 1;
   
   return `北京市${districts[districtIndex]}${streets[streetIndex]}${number}号附近`;
+}
+
+// POI 搜索结果类型
+export interface POISearchResult {
+  id: string;
+  name: string;
+  address: string;
+  coordinate: Coordinate;
+  type: string;
+  district: string;
+}
+
+// POI 搜索
+export async function searchPOI(
+  keyword: string,
+  city: string = '北京'
+): Promise<POISearchResult[]> {
+  try {
+    const sdk = await loadAMapSDK();
+    
+    return new Promise((resolve) => {
+      // 使用 PlaceSearch 插件
+      sdk.plugin('AMap.PlaceSearch', () => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const placeSearch = new (sdk as any).PlaceSearch({
+          city: city,
+          citylimit: false, // 不限制城市
+          extensions: 'all',
+          pageSize: 20,
+        });
+
+        placeSearch.search(keyword, (status: string, result: {
+          info: string;
+          poiList?: {
+            pois: Array<{
+              id: string;
+              name: string;
+              address: string;
+              location: AMapLngLat;
+              type: string;
+              pname: string;
+              cityname: string;
+              adname: string;
+            }>;
+          };
+        }) => {
+          if (status === 'complete' && result.poiList && result.poiList.pois) {
+            const results: POISearchResult[] = result.poiList.pois.map(poi => ({
+              id: poi.id,
+              name: poi.name,
+              address: poi.address || `${poi.pname}${poi.cityname}${poi.adname}`,
+              coordinate: {
+                lng: poi.location.getLng(),
+                lat: poi.location.getLat(),
+              },
+              type: poi.type,
+              district: poi.adname || poi.cityname,
+            }));
+            resolve(results);
+          } else {
+            console.warn('POI search failed:', status, result);
+            resolve([]);
+          }
+        });
+      });
+    });
+  } catch (error) {
+    console.error('POI search error:', error);
+    return [];
+  }
+}
+
+// 输入提示搜索（更轻量级，适合输入时实时搜索）
+export async function searchAutoComplete(
+  keyword: string,
+  city: string = '北京'
+): Promise<POISearchResult[]> {
+  try {
+    const sdk = await loadAMapSDK();
+    
+    return new Promise((resolve) => {
+      sdk.plugin('AMap.AutoComplete', () => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const autoComplete = new (sdk as any).AutoComplete({
+          city: city,
+          citylimit: false,
+        });
+
+        autoComplete.search(keyword, (status: string, result: {
+          info: string;
+          tips?: Array<{
+            id: string;
+            name: string;
+            address: string;
+            location?: AMapLngLat;
+            district: string;
+          }>;
+        }) => {
+          if (status === 'complete' && result.tips) {
+            const results: POISearchResult[] = result.tips
+              .filter(tip => tip.location) // 只保留有坐标的结果
+              .map(tip => ({
+                id: tip.id,
+                name: tip.name,
+                address: tip.address || tip.district,
+                coordinate: {
+                  lng: tip.location!.getLng(),
+                  lat: tip.location!.getLat(),
+                },
+                type: '',
+                district: tip.district,
+              }));
+            resolve(results);
+          } else {
+            // 如果 AutoComplete 失败，回退到 POI 搜索
+            searchPOI(keyword, city).then(resolve);
+          }
+        });
+      });
+    });
+  } catch (error) {
+    console.error('AutoComplete error:', error);
+    // 回退到 POI 搜索
+    return searchPOI(keyword, city);
+  }
+}
+
+// 生成高德地图导航链接
+export function generateAmapNavUrl(
+  destination: Coordinate,
+  destName: string,
+  origin?: Coordinate,
+  originName?: string
+): string {
+  const baseUrl = 'https://uri.amap.com/navigation';
+  const params = new URLSearchParams({
+    to: `${destination.lng},${destination.lat},${encodeURIComponent(destName)}`,
+    mode: 'car',
+    policy: '1', // 推荐路线
+    src: 'rally-point',
+    coordinate: 'gaode',
+    callnative: '1', // 优先调用高德地图 APP
+  });
+  
+  if (origin && originName) {
+    params.set('from', `${origin.lng},${origin.lat},${encodeURIComponent(originName)}`);
+  }
+  
+  return `${baseUrl}?${params.toString()}`;
+}
+
+// 生成百度地图导航链接
+export function generateBaiduNavUrl(
+  destination: Coordinate,
+  destName: string
+): string {
+  // 需要将高德坐标转换为百度坐标（简单偏移，实际应使用坐标转换 API）
+  // 这里使用 gcj02tobdll 的近似转换
+  const x_pi = 3.14159265358979324 * 3000.0 / 180.0;
+  const x = destination.lng;
+  const y = destination.lat;
+  const z = Math.sqrt(x * x + y * y) + 0.00002 * Math.sin(y * x_pi);
+  const theta = Math.atan2(y, x) + 0.000003 * Math.cos(x * x_pi);
+  const bd_lng = z * Math.cos(theta) + 0.0065;
+  const bd_lat = z * Math.sin(theta) + 0.006;
+  
+  const baseUrl = 'https://api.map.baidu.com/direction';
+  const params = new URLSearchParams({
+    destination: `latlng:${bd_lat},${bd_lng}|name:${destName}`,
+    mode: 'driving',
+    origin: '', // 当前位置
+    output: 'html',
+    src: 'rally-point',
+  });
+  
+  return `${baseUrl}?${params.toString()}`;
+}
+
+// 生成腾讯地图导航链接
+export function generateQQMapNavUrl(
+  destination: Coordinate,
+  destName: string
+): string {
+  const baseUrl = 'https://apis.map.qq.com/uri/v1/routeplan';
+  const params = new URLSearchParams({
+    type: 'drive',
+    tocoord: `${destination.lat},${destination.lng}`,
+    to: destName,
+    policy: '0', // 较快
+    referer: 'rally-point',
+  });
+  
+  return `${baseUrl}?${params.toString()}`;
 }
 

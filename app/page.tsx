@@ -3,8 +3,8 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import type { DeparturePoint, Destination, MeetingPlan, Coordinate } from '@/types';
-import { generateMeetingPlans } from '@/lib/algorithm';
-import { getMockAddress } from '@/lib/map';
+import { generateMeetingPlans, generateMeetingPlansWithAPI } from '@/lib/algorithm';
+import { getMockAddress, reverseGeocode } from '@/lib/map';
 import LocationInput from '@/components/LocationInput';
 import PlanCard from '@/components/PlanCard';
 import {
@@ -90,22 +90,45 @@ export default function HomePage() {
 
     setIsCalculating(true);
 
-    // 模拟计算延迟
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    try {
+      // 使用真实 API 生成推荐方案
+      // 可以通过传入 useRealAPI: false 来使用估算版本
+      const newPlans = await generateMeetingPlansWithAPI(
+        departures,
+        destinations,
+        '北京',  // 城市，用于公交查询
+        true     // 使用真实 API
+      );
 
-    // 生成推荐方案（传入目的地）
-    const newPlans = generateMeetingPlans(departures, destinations);
+      // 为每个方案获取真实地址
+      const plansWithAddress = await Promise.all(
+        newPlans.map(async (plan) => {
+          // 尝试获取真实地址，失败则使用模拟地址
+          const realAddress = await reverseGeocode(plan.coordinate);
+          return {
+            ...plan,
+            address: realAddress || getMockAddress(plan.coordinate),
+          };
+        })
+      );
 
-    // 为每个方案添加模拟地址
-    const plansWithAddress = newPlans.map((plan) => ({
-      ...plan,
-      address: getMockAddress(plan.coordinate),
-    }));
-
-    setPlans(plansWithAddress);
-    setSelectedPlan(plansWithAddress[0] || null);
-    setShowResults(true);
-    setIsCalculating(false);
+      setPlans(plansWithAddress);
+      setSelectedPlan(plansWithAddress[0] || null);
+      setShowResults(true);
+    } catch (error) {
+      console.error('计算方案出错:', error);
+      // 出错时退回到估算版本
+      const fallbackPlans = generateMeetingPlans(departures, destinations);
+      const plansWithAddress = fallbackPlans.map((plan) => ({
+        ...plan,
+        address: getMockAddress(plan.coordinate),
+      }));
+      setPlans(plansWithAddress);
+      setSelectedPlan(plansWithAddress[0] || null);
+      setShowResults(true);
+    } finally {
+      setIsCalculating(false);
+    }
   }, [departures, destinations]);
 
   // 选择方案

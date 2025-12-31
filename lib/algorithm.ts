@@ -1,4 +1,5 @@
-import type { Coordinate, DeparturePoint, Destination, DestinationRouteInfo, MeetingPlan, RouteInfo, TravelMode } from '@/types';
+import type { Coordinate, DeparturePoint, Destination, DestinationRouteInfo, MeetingPlan, RouteInfo, TravelMode, TransitPlan } from '@/types';
+import { searchRoute, searchRoutesInBatch, type RouteResult } from './routeService';
 
 // 计算两点之间的直线距离（公里）
 export function calculateDistance(p1: Coordinate, p2: Coordinate): number {
@@ -407,5 +408,337 @@ export function getTravelModeName(mode: TravelMode): string {
     walking: '步行',
   };
   return names[mode];
+}
+
+// ============================================
+// 以下是使用真实路径规划 API 的函数
+// ============================================
+
+/**
+ * 使用真实 API 评估候选点
+ * @param candidate 候选汇合点
+ * @param departures 出发点列表
+ * @param destinations 目的地列表
+ * @param city 城市名（用于公交查询）
+ */
+export async function evaluateCandidateWithAPI(
+  candidate: Coordinate,
+  departures: DeparturePoint[],
+  destinations: Destination[] = [],
+  city: string = '北京'
+): Promise<{
+  routes: RouteInfo[];
+  destinationRoutes: DestinationRouteInfo[];
+  avgDuration: number;
+  maxDuration: number;
+  minDuration: number;
+  durationVariance: number;
+  avgDestinationDuration: number;
+  score: number;
+}> {
+  // 并行查询所有出发点到候选点的路线
+  const routeResults = await searchRoutesInBatch(
+    departures.map(d => ({
+      id: d.id,
+      coordinate: d.coordinate,
+      mode: d.travelMode,
+      name: d.name,
+    })),
+    candidate,
+    city
+  );
+
+  // 构建路径信息
+  const routes: RouteInfo[] = departures.map((dep) => {
+    const result = routeResults.get(dep.id);
+    
+    // 如果 API 查询失败，使用估算值
+    if (!result) {
+      const distance = calculateDistance(dep.coordinate, candidate);
+      const duration = estimateDuration(distance, dep.travelMode);
+      return {
+        departureId: dep.id,
+        departureName: dep.name,
+        duration,
+        distance: Math.round(distance * 10) / 10,
+        travelMode: dep.travelMode,
+      };
+    }
+    
+    return {
+      departureId: dep.id,
+      departureName: dep.name,
+      duration: result.duration,
+      distance: result.distance,
+      travelMode: dep.travelMode,
+      transitPlan: result.transitPlan,
+      drivingRoute: result.drivingRoute,
+      walkingRoute: result.walkingRoute,
+    };
+  });
+
+  // 查询从候选点到各目的地的路线（使用公交）
+  const destinationRoutes: DestinationRouteInfo[] = await Promise.all(
+    destinations.map(async (dest) => {
+      const result = await searchRoute(candidate, dest.coordinate, 'transit', city);
+      
+      if (!result) {
+        const distance = calculateDistance(candidate, dest.coordinate);
+        const duration = estimateDuration(distance, 'transit');
+        return {
+          destinationId: dest.id,
+          destinationName: dest.name,
+          duration,
+          distance: Math.round(distance * 10) / 10,
+        };
+      }
+      
+      return {
+        destinationId: dest.id,
+        destinationName: dest.name,
+        duration: result.duration,
+        distance: result.distance,
+        transitPlan: result.transitPlan,
+      };
+    })
+  );
+
+  // 计算统计数据
+  const durations = routes.map((r) => r.duration);
+  const avgDuration = durations.reduce((a, b) => a + b, 0) / durations.length;
+  const maxDuration = Math.max(...durations);
+  const minDuration = Math.min(...durations);
+  const durationVariance = maxDuration - minDuration;
+
+  const avgDestinationDuration = destinationRoutes.length > 0
+    ? destinationRoutes.reduce((sum, r) => sum + r.duration, 0) / destinationRoutes.length
+    : 0;
+
+  // 计算评分
+  const avgScore = Math.max(0, 100 - avgDuration);
+  const fairnessScore = Math.max(0, 100 - durationVariance * 2);
+  
+  let score: number;
+  if (destinations.length > 0) {
+    const destinationScore = Math.max(0, 100 - avgDestinationDuration * 1.5);
+    score = avgScore * 0.4 + fairnessScore * 0.3 + destinationScore * 0.3;
+  } else {
+    score = avgScore * 0.6 + fairnessScore * 0.4;
+  }
+
+  return {
+    routes,
+    destinationRoutes,
+    avgDuration: Math.round(avgDuration),
+    maxDuration: Math.round(maxDuration),
+    minDuration: Math.round(minDuration),
+    durationVariance: Math.round(durationVariance),
+    avgDestinationDuration: Math.round(avgDestinationDuration),
+    score: Math.round(score),
+  };
+}
+
+/**
+ * 使用真实 API 生成推荐方案
+ * @param departures 出发点列表
+ * @param destinations 目的地列表（可选）
+ * @param city 城市名（默认北京）
+ * @param useRealAPI 是否使用真实 API（默认 true）
+ */
+export async function generateMeetingPlansWithAPI(
+  departures: DeparturePoint[],
+  destinations: Destination[] = [],
+  city: string = '北京',
+  useRealAPI: boolean = true
+): Promise<MeetingPlan[]> {
+  if (departures.length < 2) {
+    return [];
+  }
+
+  // 如果不使用真实 API，退回到估算版本
+  if (!useRealAPI) {
+    return generateMeetingPlans(departures, destinations);
+  }
+
+  const hasDestinations = destinations.length > 0;
+
+  // 生成候选点（减少数量以节约 API 调用）
+  const allCandidates = generateCandidatePoints(departures, destinations);
+  
+  // 只取前 8 个候选点进行真实 API 查询（避免调用太多次）
+  const candidates = allCandidates.slice(0, 8);
+
+  // 并行评估所有候选点
+  const evaluatedPlans = await Promise.all(
+    candidates.map(async (candidate, index) => {
+      const evaluation = await evaluateCandidateWithAPI(candidate, departures, destinations, city);
+      return {
+        id: `plan-${index}`,
+        name: `汇合点 ${index + 1}`,
+        address: '',
+        coordinate: candidate,
+        ...evaluation,
+      };
+    })
+  );
+
+  // 按综合评分排序
+  evaluatedPlans.sort((a, b) => b.score - a.score);
+
+  // 选取前3个差异化的方案
+  const selectedPlans: typeof evaluatedPlans = [];
+  for (const plan of evaluatedPlans) {
+    const isDifferent = selectedPlans.every((selected) => {
+      const dist = calculateDistance(selected.coordinate, plan.coordinate);
+      return dist > 0.5;
+    });
+
+    if (isDifferent || selectedPlans.length === 0) {
+      selectedPlans.push(plan);
+    }
+
+    if (selectedPlans.length >= 3) break;
+  }
+
+  // 生成最终方案（带推荐理由）
+  return selectedPlans.map((plan, index) => {
+    const { recommendation, pros, cons } = generateRecommendationWithTransit(plan, index + 1, hasDestinations);
+    
+    let names: string[];
+    if (hasDestinations) {
+      names = ['最佳汇合点', '靠近目的地', '均衡方案'];
+    } else {
+      names = ['最佳汇合点', '备选方案 A', '备选方案 B'];
+    }
+    
+    return {
+      ...plan,
+      name: names[index] || `方案 ${index + 1}`,
+      recommendation,
+      pros,
+      cons,
+    };
+  });
+}
+
+/**
+ * 生成推荐理由（考虑详细交通方式）
+ */
+function generateRecommendationWithTransit(
+  plan: Omit<MeetingPlan, 'recommendation' | 'pros' | 'cons'>,
+  rank: number,
+  hasDestinations: boolean
+): { recommendation: string; pros: string[]; cons: string[] } {
+  const pros: string[] = [];
+  const cons: string[] = [];
+  let recommendation = '';
+
+  // 基于各种指标生成理由
+  if (plan.durationVariance <= 10) {
+    pros.push('各方出行时间非常均衡，没有人需要特别赶路');
+  } else if (plan.durationVariance <= 20) {
+    pros.push('各方出行时间较为均衡');
+  } else {
+    cons.push(`出行时间差异较大（相差约${plan.durationVariance}分钟）`);
+  }
+
+  if (plan.avgDuration <= 30) {
+    pros.push('平均耗时短，大家都能快速到达');
+  } else if (plan.avgDuration <= 45) {
+    pros.push('平均耗时在合理范围内');
+  } else {
+    cons.push('整体耗时偏长，需要预留充足时间');
+  }
+
+  // 分析交通方式
+  const transitRoutes = plan.routes.filter(r => r.transitPlan);
+  const subwayRoutes = transitRoutes.filter(r => 
+    r.transitPlan?.segments.some(s => s.type === 'subway')
+  );
+  const busOnlyRoutes = transitRoutes.filter(r => 
+    r.transitPlan?.segments.every(s => s.type === 'bus' || s.type === 'walk')
+  );
+
+  if (subwayRoutes.length > 0) {
+    const subwayNames = subwayRoutes
+      .map(r => r.departureName)
+      .join('、');
+    pros.push(`${subwayNames}可乘地铁直达，方便快捷`);
+  }
+
+  // 检查换乘次数
+  const highTransferRoutes = transitRoutes.filter(r => {
+    const transfers = r.transitPlan?.segments.filter(s => s.type !== 'walk').length || 0;
+    return transfers > 2;
+  });
+  
+  if (highTransferRoutes.length > 0) {
+    cons.push(`${highTransferRoutes.map(r => r.departureName).join('、')}需要多次换乘`);
+  }
+
+  // 检查步行距离
+  const longWalkRoutes = transitRoutes.filter(r => {
+    return (r.transitPlan?.walkingDistance || 0) > 1000;
+  });
+  
+  if (longWalkRoutes.length > 0) {
+    cons.push(`${longWalkRoutes.map(r => r.departureName).join('、')}需要较长步行距离`);
+  }
+
+  // 检查是否有人特别近
+  const shortRoutes = plan.routes.filter((r) => r.duration <= 15);
+  if (shortRoutes.length > 0 && subwayRoutes.length === 0) {
+    pros.push(`${shortRoutes.map((r) => r.departureName).join('、')}可以很快到达`);
+  }
+
+  // 检查是否有人特别远
+  const longRoutes = plan.routes.filter((r) => r.duration >= 60);
+  if (longRoutes.length > 0) {
+    cons.push(`${longRoutes.map((r) => r.departureName).join('、')}需要较长时间`);
+  }
+
+  // 目的地相关
+  if (hasDestinations && plan.destinationRoutes.length > 0) {
+    if (plan.avgDestinationDuration <= 20) {
+      pros.push(`距离目的地很近，汇合后只需约${plan.avgDestinationDuration}分钟`);
+    } else if (plan.avgDestinationDuration <= 35) {
+      pros.push(`到目的地路程适中，约${plan.avgDestinationDuration}分钟`);
+    } else {
+      cons.push(`汇合后到目的地还需约${plan.avgDestinationDuration}分钟`);
+    }
+
+    // 检查到目的地是否有地铁
+    const destWithSubway = plan.destinationRoutes.filter(r => 
+      r.transitPlan?.segments.some(s => s.type === 'subway')
+    );
+    if (destWithSubway.length > 0) {
+      pros.push('到目的地可乘地铁');
+    }
+  }
+
+  // 生成总结性推荐语
+  if (rank === 1) {
+    if (hasDestinations) {
+      recommendation = '综合考虑各方出行和目的地位置的最优方案';
+    } else {
+      recommendation = pros.length > cons.length 
+        ? '综合评分最高的方案，兼顾效率与公平性'
+        : '相对最优的选择，建议优先考虑';
+    }
+  } else if (rank === 2) {
+    if (hasDestinations) {
+      recommendation = plan.avgDestinationDuration < 25 
+        ? '更靠近目的地的备选方案'
+        : '公平性较好的备选方案';
+    } else {
+      recommendation = plan.durationVariance < 15 
+        ? '公平性较好的备选方案，各方时间差异小'
+        : '效率优先的备选方案';
+    }
+  } else {
+    recommendation = '第三备选方案，供参考对比';
+  }
+
+  return { recommendation, pros, cons };
 }
 
