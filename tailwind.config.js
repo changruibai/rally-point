@@ -9,34 +9,39 @@ module.exports = {
     extend: {
       colors: {
         primary: {
-          50: '#f0fdf4',
-          100: '#dcfce7',
-          200: '#bbf7d0',
-          300: '#86efac',
-          400: '#4ade80',
-          500: '#22c55e',
-          600: '#16a34a',
-          700: '#15803d',
-          800: '#166534',
-          900: '#14532d',
+          DEFAULT: '#FF6B35',
+          light: '#FF8F66',
+          dark: '#E55A2B',
         },
-        accent: {
-          50: '#fef3c7',
-          100: '#fde68a',
-          200: '#fcd34d',
-          300: '#fbbf24',
-          400: '#f59e0b',
-          500: '#d97706',
+        bg: {
+          main: '#FAFAFA',
+          card: '#FFFFFF',
+          dark: '#1A1A2E',
+        },
+        text: {
+          primary: '#2D3436',
+          secondary: '#636E72',
+        },
+        participant: {
+          1: '#3498DB',
+          2: '#E74C3C',
+          3: '#2ECC71',
+          4: '#9B59B6',
+          5: '#F39C12',
+          6: '#1ABC9C',
+          7: '#E91E63',
+          8: '#00BCD4',
         },
       },
       fontFamily: {
-        sans: ['var(--font-noto)', 'system-ui', 'sans-serif'],
-        display: ['var(--font-display)', 'system-ui', 'sans-serif'],
+        sans: ['Noto Sans SC', 'system-ui', 'sans-serif'],
       },
       animation: {
+        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'bounce-slow': 'bounce 2s infinite',
         'fade-in': 'fadeIn 0.5s ease-out',
-        'slide-up': 'slideUp 0.5s ease-out',
-        'pulse-soft': 'pulseSoft 2s ease-in-out infinite',
+        'slide-up': 'slideUp 0.4s ease-out',
+        'scale-in': 'scaleIn 0.3s ease-out',
       },
       keyframes: {
         fadeIn: {
@@ -47,14 +52,12 @@ module.exports = {
           '0%': { opacity: '0', transform: 'translateY(20px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
-        pulseSoft: {
-          '0%, 100%': { opacity: '1' },
-          '50%': { opacity: '0.7' },
+        scaleIn: {
+          '0%': { opacity: '0', transform: 'scale(0.9)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
         },
       },
     },
   },
   plugins: [],
 }
-
-

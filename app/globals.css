@@ -1,60 +1,108 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --font-noto: 'Noto Sans SC', system-ui, sans-serif;
-  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  /* 主色调 - 活力橙 */
+  --primary: #FF6B35;
+  --primary-light: #FF8F66;
+  --primary-dark: #E55A2B;
+  
+  /* 背景色 */
+  --bg-main: #FAFAFA;
+  --bg-card: #FFFFFF;
+  --bg-dark: #1A1A2E;
+  
+  /* 文字色 */
+  --text-primary: #2D3436;
+  --text-secondary: #636E72;
+  
+  /* 参与者颜色 */
+  --participant-1: #3498DB;
+  --participant-2: #E74C3C;
+  --participant-3: #2ECC71;
+  --participant-4: #9B59B6;
+  --participant-5: #F39C12;
+  --participant-6: #1ABC9C;
+  --participant-7: #E91E63;
+  --participant-8: #00BCD4;
 }
 
 * {
   box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
-html {
-  scroll-behavior: smooth;
-}
-
+html,
 body {
-  font-family: var(--font-noto);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  font-family: 'Noto Sans SC', system-ui, -apple-system, sans-serif;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);
+  min-height: 100vh;
+  color: var(--text-primary);
 }
 
 /* 自定义滚动条 */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
-  border-radius: 4px;
+  background: #f1f1f1;
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
+  background: #c1c1c1;
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #a1a1a1;
+}
+
+/* 选中文本样式 */
+::selection {
+  background: var(--primary-light);
+  color: white;
+}
+
+/* 输入框焦点样式 */
+input:focus,
+button:focus {
+  outline: none;
+}
+
+/* 平滑滚动 */
+html {
+  scroll-behavior: smooth;
+}
+
+/* 地图容器 */
+.map-container {
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
 }
 
 /* 动画类 */
 .animate-fade-in {
-  animation: fadeIn 0.5s ease-out;
+  animation: fadeIn 0.4s ease-out;
 }
 
 .animate-slide-up {
-  animation: slideUp 0.5s ease-out;
+  animation: slideUp 0.4s ease-out;
 }
 
-.animate-slide-up-delayed {
-  animation: slideUp 0.5s ease-out;
-  animation-fill-mode: both;
+.animate-scale-in {
+  animation: scaleIn 0.3s ease-out;
+}
+
+.animate-pulse-dot {
+  animation: pulseDot 2s infinite;
 }
 
 @keyframes fadeIn {
@@ -77,119 +125,78 @@ body {
   }
 }
 
-@keyframes pulse {
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulseDot {
   0%, 100% {
     transform: scale(1);
     opacity: 1;
   }
   50% {
-    transform: scale(1.1);
-    opacity: 0.8;
+    transform: scale(1.2);
+    opacity: 0.7;
   }
 }
 
-/* 地图标记动画 */
-.marker-pulse {
-  animation: pulse 2s infinite;
+/* 骨架屏动画 */
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* 高德地图信息窗口样式覆盖 */
+.amap-info-content {
+  padding: 0 !important;
+}
+
+.amap-info-close {
+  top: 8px !important;
+  right: 8px !important;
+}
+
+/* 响应式断点工具类 */
+@layer utilities {
+  .safe-area-inset-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
 }
 
 /* 渐变背景 */
-.bg-gradient-mesh {
-  background-color: #f8fafc;
-  background-image: 
-    radial-gradient(at 40% 20%, rgba(34, 197, 94, 0.08) 0px, transparent 50%),
-    radial-gradient(at 80% 0%, rgba(59, 130, 246, 0.06) 0px, transparent 50%),
-    radial-gradient(at 0% 50%, rgba(249, 115, 22, 0.05) 0px, transparent 50%),
-    radial-gradient(at 80% 50%, rgba(139, 92, 246, 0.05) 0px, transparent 50%),
-    radial-gradient(at 0% 100%, rgba(34, 197, 94, 0.06) 0px, transparent 50%),
-    radial-gradient(at 80% 100%, rgba(236, 72, 153, 0.05) 0px, transparent 50%);
+.bg-gradient-primary {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
 }
 
-/* 玻璃态效果 */
+/* 毛玻璃效果 */
 .glass {
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
-/* 卡片悬停效果 */
-.card-hover {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+/* 卡片阴影 */
+.card-shadow {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
-.card-hover:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.15);
+.card-shadow-lg {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
 }
-
-/* 按钮涟漪效果 */
-.btn-ripple {
-  position: relative;
-  overflow: hidden;
-}
-
-.btn-ripple::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 0;
-  height: 0;
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
-  transition: width 0.4s, height 0.4s;
-}
-
-.btn-ripple:active::after {
-  width: 200%;
-  height: 200%;
-}
-
-/* 输入框焦点效果 */
-input:focus, textarea:focus {
-  outline: none;
-}
-
-/* 响应式地图高度 */
-@media (max-width: 1024px) {
-  .map-container {
-    height: 50vh;
-    min-height: 300px;
-  }
-}
-
-@media (min-width: 1025px) {
-  .map-container {
-    height: calc(100vh - 200px);
-    min-height: 500px;
-  }
-}
-
-/* 隐藏高德地图 logo */
-.amap-logo {
-  display: none !important;
-}
-
-.amap-copyright {
-  display: none !important;
-}
-
-/* 页面容器 */
-.page-container {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
-
-/* 标题字体 */
-.font-display {
-  font-family: var(--font-display);
-}
-
-/* 数字等宽 */
-.tabular-nums {
-  font-variant-numeric: tabular-nums;
-}
-
-
