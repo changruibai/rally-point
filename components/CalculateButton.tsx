@@ -9,6 +9,9 @@ const CalculateButton: React.FC = memo(function CalculateButton() {
   const {
     participants,
     selectedPOITypes,
+    selectedCuisines,
+    selectedTastes,
+    minRating,
     strategy,
     scenarioMode,
     destination,
@@ -32,13 +35,21 @@ const CalculateButton: React.FC = memo(function CalculateButton() {
     setCalculating(true, '正在初始化...');
 
     try {
+      // 构建饮食偏好
+      const foodPreferences = {
+        cuisines: selectedCuisines,
+        tastes: selectedTastes,
+        minRating: minRating > 0 ? minRating : undefined,
+      };
+
       const result = await calculateMeetingPoint(
         participants,
         selectedPOITypes,
         strategy,
         (progress) => setCalculating(true, progress),
         scenarioMode,
-        destination
+        destination,
+        foodPreferences
       );
 
       setResults(result.bestPlan, result.alternatives, result.searchCenter);
@@ -50,6 +61,9 @@ const CalculateButton: React.FC = memo(function CalculateButton() {
   }, [
     participants,
     selectedPOITypes,
+    selectedCuisines,
+    selectedTastes,
+    minRating,
     strategy,
     scenarioMode,
     destination,

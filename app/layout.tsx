@@ -9,7 +9,8 @@ export const metadata: Metadata = {
   viewport: 'width=device-width, initial-scale=1, maximum-scale=1',
   themeColor: '#FF6B35',
   icons: {
-    icon: '/favicon.ico',
+    icon: '/favicon.svg',
+    apple: '/icon.svg',
   },
 };
 

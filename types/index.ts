@@ -31,6 +31,34 @@ export type POIType =
   | 'mall'          // 商场
   | 'parking';      // 停车场
 
+/** 菜系类型 */
+export type CuisineType =
+  | 'chinese'       // 中餐
+  | 'western'       // 西餐
+  | 'japanese'      // 日料
+  | 'korean'        // 韩餐
+  | 'hotpot'        // 火锅
+  | 'bbq'           // 烧烤
+  | 'fastfood'      // 快餐
+  | 'dessert';      // 甜点饮品
+
+/** 口味偏好 */
+export type TastePreference =
+  | 'light'         // 清淡
+  | 'spicy'         // 辣
+  | 'sour'          // 酸
+  | 'sweet'         // 甜
+  | 'salty'         // 咸鲜
+  | 'vegetarian';   // 素食
+
+/** 饮食偏好设置 */
+export interface FoodPreferences {
+  cuisines: CuisineType[];
+  tastes: TastePreference[];
+  minRating?: number;        // 最低评分 (0-5)
+  maxPrice?: number;         // 人均最高价格
+}
+
 /** POI 信息 */
 export interface POI {
   id: string;
@@ -39,6 +67,11 @@ export interface POI {
   typeName: string;
   location: Location;
   distance?: number;
+  // 扩展字段（来自高德 business）
+  rating?: number;           // 评分
+  cost?: number;             // 人均消费
+  openTime?: string;         // 营业时间
+  tags?: string[];           // 特色标签
 }
 
 /** 路线信息 */
@@ -72,7 +105,8 @@ export interface CalculateRequest {
   poiTypes?: POIType[];
   strategy?: CalculateStrategy;
   scenarioMode?: ScenarioMode;
-  destination?: Location;      // 目的地（destination 模式必须）
+  destination?: Location;           // 目的地（destination 模式必须）
+  foodPreferences?: FoodPreferences; // 饮食偏好
 }
 
 /** 计算响应 */

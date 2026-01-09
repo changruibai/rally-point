@@ -30,8 +30,9 @@ export async function GET(request: NextRequest) {
     url.searchParams.append('location', `${lng},${lat}`);
     url.searchParams.append('radius', radius);
     url.searchParams.append('types', types);
-    url.searchParams.append('page_size', '20');
-    url.searchParams.append('show_fields', 'business');
+    url.searchParams.append('page_size', '25');
+    // 获取扩展字段：business 包含评分、人均消费、营业时间、特色标签等
+    url.searchParams.append('show_fields', 'business,photos');
 
     const response = await fetch(url.toString());
     const data = await response.json();
@@ -54,6 +55,12 @@ export async function GET(request: NextRequest) {
         location: string;
         distance?: string;
         address?: string;
+        business?: {
+          rating?: string;
+          cost?: string;
+          opentime_today?: string;
+          keytag?: string;
+        };
       }) => {
         // 验证坐标格式
         if (!poi.location || typeof poi.location !== 'string') {
@@ -71,6 +78,19 @@ export async function GET(request: NextRequest) {
           name: poi.name,
         };
 
+        // 解析扩展字段
+        const business = poi.business || {};
+        const rating = business.rating ? parseFloat(business.rating) : undefined;
+        const cost = business.cost ? parseInt(business.cost) : undefined;
+        // 解析标签：keytag 格式可能是 "川菜;火锅;特色菜" 或 "川菜"
+        const tags = business.keytag 
+          ? business.keytag.split(';').filter(Boolean) 
+          : [];
+        // 也从 type 字段提取标签信息
+        if (poi.type) {
+          tags.push(...poi.type.split(';').filter(Boolean));
+        }
+
         return {
           id: poi.id,
           name: poi.name,
@@ -78,6 +98,10 @@ export async function GET(request: NextRequest) {
           typeName: poi.type,
           location,
           distance: poi.distance ? parseInt(poi.distance) : undefined,
+          rating,
+          cost,
+          openTime: business.opentime_today,
+          tags: [...new Set(tags)], // 去重
         };
       })
       .filter((poi): poi is POI => poi !== null);
