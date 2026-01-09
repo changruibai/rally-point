@@ -10,6 +10,8 @@ const CalculateButton: React.FC = memo(function CalculateButton() {
     participants,
     selectedPOITypes,
     strategy,
+    scenarioMode,
+    destination,
     isCalculating,
     calculationProgress,
     setCalculating,
@@ -19,7 +21,8 @@ const CalculateButton: React.FC = memo(function CalculateButton() {
 
   // 检查是否可以计算
   const validParticipants = participants.filter((p) => p.location !== null);
-  const canCalculate = validParticipants.length >= 2 && !isCalculating;
+  const needsDestination = scenarioMode === 'destination' && !destination;
+  const canCalculate = validParticipants.length >= 2 && !isCalculating && !needsDestination;
 
   // 执行计算
   const handleCalculate = useCallback(async () => {
@@ -33,7 +36,9 @@ const CalculateButton: React.FC = memo(function CalculateButton() {
         participants,
         selectedPOITypes,
         strategy,
-        (progress) => setCalculating(true, progress)
+        (progress) => setCalculating(true, progress),
+        scenarioMode,
+        destination
       );
 
       setResults(result.bestPlan, result.alternatives, result.searchCenter);
@@ -46,6 +51,8 @@ const CalculateButton: React.FC = memo(function CalculateButton() {
     participants,
     selectedPOITypes,
     strategy,
+    scenarioMode,
+    destination,
     canCalculate,
     clearResults,
     setCalculating,
@@ -85,6 +92,11 @@ const CalculateButton: React.FC = memo(function CalculateButton() {
       {validParticipants.length < 2 && (
         <p className="text-center text-sm text-gray-500 mt-2">
           请至少设置 2 个参与者的位置
+        </p>
+      )}
+      {validParticipants.length >= 2 && needsDestination && (
+        <p className="text-center text-sm text-amber-600 mt-2">
+          🚩 请设置目的地后再计算
         </p>
       )}
     </div>

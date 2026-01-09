@@ -8,6 +8,8 @@ import {
   CalculateStrategy,
   POIType,
   Route,
+  ScenarioMode,
+  Location,
 } from '@/types';
 import {
   calculateGeometricCenter,
@@ -109,8 +111,59 @@ async function calculateRoutesToPOI(
   return routes;
 }
 
-/** 主计算函数 - 计算最佳集合点 */
+/** 主计算函数 - 计算最佳集合点（调用服务端 API） */
 export async function calculateMeetingPoint(
+  participants: Participant[],
+  poiTypes: POIType[],
+  strategy: CalculateStrategy,
+  onProgress?: (message: string) => void,
+  scenarioMode: ScenarioMode = 'meetup',
+  destination?: Location | null
+): Promise<{
+  bestPlan: MeetingPlan;
+  alternatives: MeetingPlan[];
+  searchCenter: Coordinate;
+  destination?: Location;
+}> {
+  // 验证参与者
+  const validParticipants = participants.filter((p) => p.location !== null);
+  if (validParticipants.length < 2) {
+    throw new Error('至少需要 2 个有效的参与者位置');
+  }
+
+  // 验证目的地模式
+  if (scenarioMode === 'destination' && !destination) {
+    throw new Error('目的地模式需要设置目的地');
+  }
+
+  onProgress?.('正在计算最佳集合点...');
+
+  // 调用服务端 API
+  const response = await fetch(`${API_BASE}/calculate`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      participants,
+      poiTypes,
+      strategy,
+      scenarioMode,
+      destination: destination || undefined,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || '计算失败，请稍后重试');
+  }
+
+  onProgress?.('正在生成推荐结果...');
+  return response.json();
+}
+
+/** 主计算函数（客户端版本，不使用服务端 API） */
+export async function calculateMeetingPointLocal(
   participants: Participant[],
   poiTypes: POIType[],
   strategy: CalculateStrategy,

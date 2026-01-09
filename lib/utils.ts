@@ -158,3 +158,4 @@ export function getValidCoordinates(participants: Participant[]): Coordinate[] {
     .map((p) => p.location!.coordinate);
 }
 
+

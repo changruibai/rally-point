@@ -63,11 +63,16 @@ export interface MeetingPlan {
 /** 计算策略 */
 export type CalculateStrategy = 'fair' | 'efficient' | 'balanced';
 
+/** 场景模式 */
+export type ScenarioMode = 'meetup' | 'destination';
+
 /** 计算请求 */
 export interface CalculateRequest {
   participants: Participant[];
   poiTypes?: POIType[];
   strategy?: CalculateStrategy;
+  scenarioMode?: ScenarioMode;
+  destination?: Location;      // 目的地（destination 模式必须）
 }
 
 /** 计算响应 */
@@ -75,6 +80,7 @@ export interface CalculateResponse {
   bestPlan: MeetingPlan;
   alternatives: MeetingPlan[];
   searchCenter: Coordinate;
+  destination?: Location;  // 目的地（如果有）
 }
 
 /** POI 搜索请求 */

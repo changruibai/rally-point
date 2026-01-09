@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Participant, POIType, CalculateStrategy, POI, Route, MeetingPlan, Coordinate, Location } from '@/types';
+import { Participant, POIType, CalculateStrategy, POI, Route, MeetingPlan, Coordinate, Location, ScenarioMode } from '@/types';
 import { calculateGeometricCenter, getValidCoordinates, POI_TYPE_CODES } from '@/lib/utils';
-import { calculatePlanStats, calculateScore, sortMeetingPlans } from '@/lib/algorithm';
+import { 
+  calculatePlanStats, 
+  calculateScore, 
+  sortMeetingPlans,
+  calculateDestinationAwareScore,
+  sortMeetingPlansWithDestination,
+  calculateSearchCenterWithDestination
+} from '@/lib/algorithm';
 
 /** 高德 API Key */
 const AMAP_KEY = process.env.AMAP_WEB_KEY;
@@ -11,6 +18,8 @@ interface CalculateRequestBody {
   participants: Participant[];
   poiTypes?: POIType[];
   strategy?: CalculateStrategy;
+  scenarioMode?: ScenarioMode;
+  destination?: Location;
 }
 
 /** 计算集合点 API */
@@ -24,7 +33,13 @@ export async function POST(request: NextRequest) {
 
   try {
     const body: CalculateRequestBody = await request.json();
-    const { participants, poiTypes = ['cafe', 'restaurant'], strategy = 'balanced' } = body;
+    const { 
+      participants, 
+      poiTypes = ['cafe', 'restaurant'], 
+      strategy = 'balanced',
+      scenarioMode = 'meetup',
+      destination 
+    } = body;
 
     // 验证参与者
     const validParticipants = participants.filter((p) => p.location !== null);
@@ -35,9 +50,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 1. 计算几何中心
+    // 验证目的地（如果是 destination 模式）
+    if (scenarioMode === 'destination' && !destination) {
+      return NextResponse.json(
+        { error: '目的地模式需要设置目的地' },
+        { status: 400 }
+      );
+    }
+
+    // 1. 计算几何中心（考虑目的地）
     const coordinates = getValidCoordinates(participants);
-    const center = calculateGeometricCenter(coordinates);
+    let center: Coordinate;
+    
+    if (scenarioMode === 'destination' && destination) {
+      // 搜索中心偏向目的地方向
+      center = calculateSearchCenterWithDestination(coordinates, destination.coordinate);
+    } else {
+      center = calculateGeometricCenter(coordinates);
+    }
 
     // 2. 转换 POI 类型码
     const typeCodes = poiTypes
@@ -62,7 +92,20 @@ export async function POST(request: NextRequest) {
       const routes = await calculateRoutes(validParticipants, poi);
       const stats = calculatePlanStats(routes);
       const times = routes.map((r) => r.duration);
-      const score = calculateScore(times, strategy);
+      
+      // 根据场景模式选择得分计算方式
+      let score: number;
+      if (scenarioMode === 'destination' && destination) {
+        score = calculateDestinationAwareScore(
+          times,
+          poi.location.coordinate,
+          coordinates,
+          destination.coordinate,
+          strategy
+        );
+      } else {
+        score = calculateScore(times, strategy);
+      }
 
       plans.push({
         poi,
@@ -72,13 +115,25 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 5. 排序结果
-    const sortedPlans = sortMeetingPlans(plans, strategy);
+    // 5. 排序结果（考虑目的地）
+    let sortedPlans: MeetingPlan[];
+    if (scenarioMode === 'destination' && destination) {
+      sortedPlans = sortMeetingPlansWithDestination(
+        plans,
+        coordinates,
+        destination.coordinate,
+        strategy
+      );
+    } else {
+      sortedPlans = sortMeetingPlans(plans, strategy);
+    }
 
     return NextResponse.json({
       bestPlan: sortedPlans[0],
       alternatives: sortedPlans.slice(1, 3),
       searchCenter: center,
+      // 返回目的地信息用于前端显示
+      destination: scenarioMode === 'destination' ? destination : undefined,
     });
   } catch (error) {
     console.error('计算集合点错误:', error);

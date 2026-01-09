@@ -4,6 +4,7 @@ import React from 'react';
 import dynamic from 'next/dynamic';
 import Header from '@/components/Header';
 import ParticipantList from '@/components/ParticipantList';
+import DestinationInput from '@/components/DestinationInput';
 import POITypeSelector from '@/components/POITypeSelector';
 import StrategySelector from '@/components/StrategySelector';
 import CalculateButton from '@/components/CalculateButton';
@@ -38,6 +39,9 @@ export default function HomePage() {
           <div className="w-full lg:w-[380px] flex-shrink-0 space-y-4">
             {/* 参与者列表 */}
             <ParticipantList />
+
+            {/* 集合场景（含目的地输入） */}
+            <DestinationInput />
 
             {/* 集合点类型选择 */}
             <POITypeSelector />

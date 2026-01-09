@@ -7,6 +7,7 @@ import {
   Location,
   POIType,
   CalculateStrategy,
+  ScenarioMode,
 } from '@/types';
 import { getParticipantColor, generateId } from '@/lib/utils';
 
@@ -19,6 +20,14 @@ interface AppState {
   updateParticipantLocation: (id: string, location: Location) => void;
   updateParticipantTransport: (id: string, mode: TransportMode) => void;
   updateParticipantName: (id: string, name: string) => void;
+
+  // 场景模式
+  scenarioMode: ScenarioMode;
+  setScenarioMode: (mode: ScenarioMode) => void;
+
+  // 目的地相关
+  destination: Location | null;
+  setDestination: (location: Location | null) => void;
 
   // 集合点偏好
   selectedPOITypes: POIType[];
@@ -66,6 +75,8 @@ function createParticipant(index: number): Participant {
 /** 初始状态 */
 const initialState = {
   participants: [createParticipant(0), createParticipant(1)],
+  scenarioMode: 'meetup' as ScenarioMode,
+  destination: null as Location | null,
   selectedPOITypes: ['cafe', 'restaurant'] as POIType[],
   strategy: 'balanced' as CalculateStrategy,
   isCalculating: false,
@@ -129,6 +140,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
   },
 
+  // 设置场景模式
+  setScenarioMode: (mode: ScenarioMode) => {
+    set({ scenarioMode: mode });
+  },
+
+  // 设置目的地
+  setDestination: (location: Location | null) => {
+    set({ destination: location });
+  },
+
   // 设置 POI 类型偏好
   setSelectedPOITypes: (types: POIType[]) => {
     set({ selectedPOITypes: types });
@@ -185,6 +206,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       ...initialState,
       participants: [createParticipant(0), createParticipant(1)],
+      scenarioMode: 'meetup',
+      destination: null,
     });
   },
 }));
