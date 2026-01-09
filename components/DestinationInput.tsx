@@ -76,7 +76,7 @@ const DestinationInput: React.FC = memo(function DestinationInput() {
       try {
         const results = await searchAddress(keyword);
         const items: SearchResultItem[] = results
-          .map((poi) => {
+          .map((poi: AMap.PlaceSearch.POI) => {
             const loc = poi.location;
             if (!loc) return null;
             const lng = typeof loc.getLng === 'function' ? loc.getLng() : loc.lng;
@@ -91,7 +91,7 @@ const DestinationInput: React.FC = memo(function DestinationInput() {
               location: { lng, lat },
             };
           })
-          .filter((item): item is SearchResultItem => item !== null);
+          .filter((item: SearchResultItem | null): item is SearchResultItem => item !== null);
         setSuggestions(items);
         setIsOpen(true);
       } catch (error) {

@@ -361,6 +361,3 @@ declare namespace AMap {
   }
 }
 
-export {};
-
-
