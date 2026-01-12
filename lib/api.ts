@@ -10,6 +10,7 @@ import {
   Route,
   ScenarioMode,
   Location,
+  FoodPreferences,
 } from '@/types';
 import {
   calculateGeometricCenter,
@@ -118,7 +119,8 @@ export async function calculateMeetingPoint(
   strategy: CalculateStrategy,
   onProgress?: (message: string) => void,
   scenarioMode: ScenarioMode = 'meetup',
-  destination?: Location | null
+  destination?: Location | null,
+  foodPreferences?: FoodPreferences | null
 ): Promise<{
   bestPlan: MeetingPlan;
   alternatives: MeetingPlan[];
@@ -150,6 +152,7 @@ export async function calculateMeetingPoint(
       strategy,
       scenarioMode,
       destination: destination || undefined,
+      foodPreferences: foodPreferences || undefined,
     }),
   });
 

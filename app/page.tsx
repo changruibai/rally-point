@@ -6,6 +6,7 @@ import Header from '@/components/Header';
 import ParticipantList from '@/components/ParticipantList';
 import DestinationInput from '@/components/DestinationInput';
 import POITypeSelector from '@/components/POITypeSelector';
+import FoodPreferenceSelector from '@/components/FoodPreferenceSelector';
 import StrategySelector from '@/components/StrategySelector';
 import CalculateButton from '@/components/CalculateButton';
 import ResultPanel from '@/components/ResultPanel';
@@ -28,32 +29,37 @@ export default function HomePage() {
   const { bestPlan, isCalculating } = useAppStore();
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="h-screen flex flex-col overflow-hidden">
       {/* 头部 */}
       <Header />
 
       {/* 主内容区 */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 overflow-hidden">
         <div className="flex flex-col lg:flex-row gap-4 h-full">
-          {/* 左侧面板 */}
-          <div className="w-full lg:w-[380px] flex-shrink-0 space-y-4">
-            {/* 参与者列表 */}
-            <ParticipantList />
+          {/* 左侧面板 - 可独立滚动 */}
+          <div className="w-full lg:w-[380px] flex-shrink-0 overflow-y-auto custom-scrollbar">
+            <div className="space-y-4 pb-4">
+              {/* 参与者列表 */}
+              <ParticipantList />
 
-            {/* 集合场景（含目的地输入） */}
-            <DestinationInput />
+              {/* 集合场景（含目的地输入） */}
+              <DestinationInput />
 
-            {/* 集合点类型选择 */}
-            <POITypeSelector />
+              {/* 集合点类型选择 */}
+              <POITypeSelector />
 
-            {/* 优化策略选择 */}
-            <StrategySelector />
+              {/* 饮食偏好选择 */}
+              <FoodPreferenceSelector />
 
-            {/* 计算按钮 */}
-            <CalculateButton />
+              {/* 优化策略选择 */}
+              <StrategySelector />
 
-            {/* 结果面板 */}
-            {bestPlan && <ResultPanel />}
+              {/* 计算按钮 */}
+              <CalculateButton />
+
+              {/* 结果面板 */}
+              {bestPlan && <ResultPanel />}
+            </div>
           </div>
 
           {/* 右侧地图 */}

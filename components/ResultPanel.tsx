@@ -63,6 +63,33 @@ const ResultPanel: React.FC = memo(function ResultPanel() {
           <div className="flex-1">
             <h3 className="font-semibold text-gray-800">{selectedPlan.poi.name}</h3>
             <p className="text-sm text-gray-500 mt-0.5">{selectedPlan.poi.location.address}</p>
+            {/* 评分和人均消费 */}
+            <div className="flex items-center gap-3 mt-1.5">
+              {selectedPlan.poi.rating && (
+                <span className="flex items-center text-sm">
+                  <span className="text-yellow-500">⭐</span>
+                  <span className="ml-0.5 font-medium text-gray-700">{selectedPlan.poi.rating}</span>
+                </span>
+              )}
+              {selectedPlan.poi.cost && (
+                <span className="text-sm text-gray-500">
+                  人均 ¥{selectedPlan.poi.cost}
+                </span>
+              )}
+            </div>
+            {/* 标签 */}
+            {selectedPlan.poi.tags && selectedPlan.poi.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {selectedPlan.poi.tags.slice(0, 4).map((tag, index) => (
+                  <span
+                    key={index}
+                    className="px-1.5 py-0.5 text-xs bg-orange-50 text-orange-600 rounded"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 

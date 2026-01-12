@@ -123,6 +123,72 @@ export const POI_TYPE_NAMES: Record<string, string> = {
   parking: '停车场',
 };
 
+/** 菜系类型映射到高德 POI 类型码 */
+export const CUISINE_TYPE_CODES: Record<string, string> = {
+  chinese: '050100',     // 中餐厅
+  western: '050200',     // 外国餐厅
+  japanese: '050201',    // 日本料理
+  korean: '050202',      // 韩国料理
+  hotpot: '050101',      // 火锅店
+  bbq: '050102',         // 烧烤店
+  fastfood: '050300',    // 快餐厅
+  dessert: '050500',     // 咖啡厅/甜品店
+};
+
+/** 菜系类型图标 */
+export const CUISINE_TYPE_ICONS: Record<string, string> = {
+  chinese: '🥢',
+  western: '🍝',
+  japanese: '🍣',
+  korean: '🍲',
+  hotpot: '🍲',
+  bbq: '🍖',
+  fastfood: '🍔',
+  dessert: '🍰',
+};
+
+/** 菜系类型名称 */
+export const CUISINE_TYPE_NAMES: Record<string, string> = {
+  chinese: '中餐',
+  western: '西餐',
+  japanese: '日料',
+  korean: '韩餐',
+  hotpot: '火锅',
+  bbq: '烧烤',
+  fastfood: '快餐',
+  dessert: '甜点饮品',
+};
+
+/** 口味偏好图标 */
+export const TASTE_ICONS: Record<string, string> = {
+  light: '🥗',
+  spicy: '🌶️',
+  sour: '🍋',
+  sweet: '🍬',
+  salty: '🧂',
+  vegetarian: '🥬',
+};
+
+/** 口味偏好名称 */
+export const TASTE_NAMES: Record<string, string> = {
+  light: '清淡',
+  spicy: '辣',
+  sour: '酸',
+  sweet: '甜',
+  salty: '咸鲜',
+  vegetarian: '素食',
+};
+
+/** 口味偏好对应的关键词（用于 POI 标签匹配） */
+export const TASTE_KEYWORDS: Record<string, string[]> = {
+  light: ['清淡', '养生', '粤菜', '蒸', '煮', '清蒸', '健康', '低脂', '沙拉'],
+  spicy: ['辣', '川菜', '湘菜', '麻辣', '香辣', '重庆', '四川', '贵州', '云南'],
+  sour: ['酸', '酸菜', '泰式', '东南亚', '柠檬', '醋'],
+  sweet: ['甜', '甜品', '蛋糕', '冰淇淋', '奶茶', '糖水', '港式'],
+  salty: ['咸', '鲜', '海鲜', '潮汕', '上海', '本帮', '卤味'],
+  vegetarian: ['素', '素食', '素菜', '斋', '蔬菜', '纯素', '轻食'],
+};
+
 /** 获取 POI 类型图标 */
 export function getPOIIcon(type: string): string {
   // 根据高德 POI 类型编码判断
@@ -135,7 +201,8 @@ export function getPOIIcon(type: string): string {
 }
 
 /** 防抖函数 */
-export function debounce<T extends (...args: unknown[]) => unknown>(
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function debounce<T extends (...args: any[]) => any>(
   func: T,
   wait: number
 ): (...args: Parameters<T>) => void {

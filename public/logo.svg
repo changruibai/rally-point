@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 48" fill="none">
+  <!-- 图标部分 -->
+  <g transform="translate(4, 4)">
+    <!-- 背景圆 -->
+    <circle cx="20" cy="20" r="18" fill="#FFF5F0" stroke="#FFE0D0" stroke-width="1"/>
+    
+    <!-- 中心靶心 -->
+    <circle cx="20" cy="20" r="8" fill="#FF6B35" opacity="0.2"/>
+    <circle cx="20" cy="20" r="5" fill="#FF6B35"/>
+    
+    <!-- 参与者小点 -->
+    <circle cx="6" cy="6" r="3" fill="#3498DB"/>
+    <circle cx="34" cy="6" r="3" fill="#E74C3C"/>
+    <circle cx="6" cy="34" r="3" fill="#2ECC71"/>
+    <circle cx="34" cy="34" r="3" fill="#9B59B6"/>
+    
+    <!-- 汇聚线 -->
+    <g stroke="#FFD4C4" stroke-width="1" stroke-linecap="round" stroke-dasharray="2 2">
+      <line x1="8" y1="8" x2="16" y2="16"/>
+      <line x1="32" y1="8" x2="24" y2="16"/>
+      <line x1="8" y1="32" x2="16" y2="24"/>
+      <line x1="32" y1="32" x2="24" y2="24"/>
+    </g>
+  </g>
+  
+  <!-- 文字部分 -->
+  <text x="52" y="32" font-family="system-ui, -apple-system, sans-serif" font-size="22" font-weight="700" fill="#2D3436">
+    Rally
+  </text>
+  <text x="109" y="32" font-family="system-ui, -apple-system, sans-serif" font-size="22" font-weight="700" fill="#FF6B35">
+    Point
+  </text>
+</svg>
+

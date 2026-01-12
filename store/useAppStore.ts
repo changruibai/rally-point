@@ -8,6 +8,8 @@ import {
   POIType,
   CalculateStrategy,
   ScenarioMode,
+  CuisineType,
+  TastePreference,
 } from '@/types';
 import { getParticipantColor, generateId } from '@/lib/utils';
 
@@ -32,6 +34,14 @@ interface AppState {
   // 集合点偏好
   selectedPOITypes: POIType[];
   setSelectedPOITypes: (types: POIType[]) => void;
+
+  // 饮食偏好
+  selectedCuisines: CuisineType[];
+  setSelectedCuisines: (cuisines: CuisineType[]) => void;
+  selectedTastes: TastePreference[];
+  setSelectedTastes: (tastes: TastePreference[]) => void;
+  minRating: number;
+  setMinRating: (rating: number) => void;
 
   // 计算策略
   strategy: CalculateStrategy;
@@ -78,6 +88,9 @@ const initialState = {
   scenarioMode: 'meetup' as ScenarioMode,
   destination: null as Location | null,
   selectedPOITypes: ['cafe', 'restaurant'] as POIType[],
+  selectedCuisines: ['chinese', 'hotpot'] as CuisineType[],
+  selectedTastes: [] as TastePreference[],
+  minRating: 0,
   strategy: 'balanced' as CalculateStrategy,
   isCalculating: false,
   calculationProgress: '',
@@ -155,6 +168,21 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ selectedPOITypes: types });
   },
 
+  // 设置菜系偏好
+  setSelectedCuisines: (cuisines: CuisineType[]) => {
+    set({ selectedCuisines: cuisines });
+  },
+
+  // 设置口味偏好
+  setSelectedTastes: (tastes: TastePreference[]) => {
+    set({ selectedTastes: tastes });
+  },
+
+  // 设置最低评分
+  setMinRating: (rating: number) => {
+    set({ minRating: rating });
+  },
+
   // 设置计算策略
   setStrategy: (strategy: CalculateStrategy) => {
     set({ strategy });
@@ -208,6 +236,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       participants: [createParticipant(0), createParticipant(1)],
       scenarioMode: 'meetup',
       destination: null,
+      selectedCuisines: ['chinese', 'hotpot'],
+      selectedTastes: [],
+      minRating: 0,
     });
   },
 }));

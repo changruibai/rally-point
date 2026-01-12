@@ -360,8 +360,3 @@ declare namespace AMap {
     }
   }
 }
-
-export {};
-
-
-

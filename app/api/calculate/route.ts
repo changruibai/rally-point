@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Participant, POIType, CalculateStrategy, POI, Route, MeetingPlan, Coordinate, Location, ScenarioMode } from '@/types';
-import { calculateGeometricCenter, getValidCoordinates, POI_TYPE_CODES } from '@/lib/utils';
+import { Participant, POIType, CalculateStrategy, POI, Route, MeetingPlan, Coordinate, Location, ScenarioMode, CuisineType, TastePreference, FoodPreferences } from '@/types';
+import { calculateGeometricCenter, getValidCoordinates, POI_TYPE_CODES, CUISINE_TYPE_CODES, TASTE_KEYWORDS } from '@/lib/utils';
 import { 
   calculatePlanStats, 
   calculateScore, 
@@ -20,6 +20,7 @@ interface CalculateRequestBody {
   strategy?: CalculateStrategy;
   scenarioMode?: ScenarioMode;
   destination?: Location;
+  foodPreferences?: FoodPreferences;
 }
 
 /** 计算集合点 API */
@@ -38,7 +39,8 @@ export async function POST(request: NextRequest) {
       poiTypes = ['cafe', 'restaurant'], 
       strategy = 'balanced',
       scenarioMode = 'meetup',
-      destination 
+      destination,
+      foodPreferences
     } = body;
 
     // 验证参与者
@@ -69,14 +71,30 @@ export async function POST(request: NextRequest) {
       center = calculateGeometricCenter(coordinates);
     }
 
-    // 2. 转换 POI 类型码
-    const typeCodes = poiTypes
-      .map((t) => POI_TYPE_CODES[t] || '')
-      .filter(Boolean)
-      .join('|');
+    // 2. 转换 POI 类型码（结合食物偏好）
+    let typeCodes: string;
+    
+    // 如果有菜系偏好，使用菜系类型码
+    if (foodPreferences?.cuisines && foodPreferences.cuisines.length > 0) {
+      typeCodes = foodPreferences.cuisines
+        .map((c) => CUISINE_TYPE_CODES[c] || '')
+        .filter(Boolean)
+        .join('|');
+    } else {
+      // 否则使用通用 POI 类型码
+      typeCodes = poiTypes
+        .map((t) => POI_TYPE_CODES[t] || '')
+        .filter(Boolean)
+        .join('|');
+    }
 
     // 3. 搜索候选 POI
-    const pois = await searchPOIs(center, 2000, typeCodes);
+    let pois = await searchPOIs(center, 2000, typeCodes);
+    
+    // 4. 根据饮食偏好筛选和评分 POI
+    if (foodPreferences) {
+      pois = filterAndScorePOIs(pois, foodPreferences);
+    }
     if (pois.length === 0) {
       return NextResponse.json(
         { error: '未找到合适的集合点' },
@@ -84,7 +102,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. 限制候选点数量并计算路线
+    // 5. 限制候选点数量并计算路线
     const candidatePOIs = pois.slice(0, 8);
     const plans: MeetingPlan[] = [];
 
@@ -155,7 +173,9 @@ async function searchPOIs(
   url.searchParams.append('location', `${center.lng},${center.lat}`);
   url.searchParams.append('radius', radius.toString());
   url.searchParams.append('types', types || '050000|060000');
-  url.searchParams.append('page_size', '20');
+  url.searchParams.append('page_size', '25');
+  // 获取扩展字段：business 包含评分、人均消费、营业时间、特色标签等
+  url.searchParams.append('show_fields', 'business');
 
   const response = await fetch(url.toString());
   const data = await response.json();
@@ -174,6 +194,12 @@ async function searchPOIs(
       location: string;
       distance?: string;
       address?: string;
+      business?: {
+        rating?: string;
+        cost?: string;
+        opentime_today?: string;
+        keytag?: string;
+      };
     }) => {
       // 验证坐标格式
       if (!poi.location || typeof poi.location !== 'string') {
@@ -191,6 +217,19 @@ async function searchPOIs(
         name: poi.name,
       };
 
+      // 解析扩展字段
+      const business = poi.business || {};
+      const rating = business.rating ? parseFloat(business.rating) : undefined;
+      const cost = business.cost ? parseInt(business.cost) : undefined;
+      // 解析标签
+      const tags: string[] = [];
+      if (business.keytag) {
+        tags.push(...business.keytag.split(';').filter(Boolean));
+      }
+      if (poi.type) {
+        tags.push(...poi.type.split(';').filter(Boolean));
+      }
+
       return {
         id: poi.id,
         name: poi.name,
@@ -198,9 +237,71 @@ async function searchPOIs(
         typeName: poi.type,
         location,
         distance: poi.distance ? parseInt(poi.distance) : undefined,
+        rating,
+        cost,
+        openTime: business.opentime_today,
+        tags: [...new Set(tags)],
       };
     })
     .filter((poi): poi is POI => poi !== null);
+}
+
+/** 根据饮食偏好筛选和评分 POI */
+function filterAndScorePOIs(pois: POI[], preferences: FoodPreferences): POI[] {
+  const { tastes = [], minRating = 0 } = preferences;
+
+  // 1. 按评分筛选
+  let filtered = pois;
+  if (minRating > 0) {
+    filtered = filtered.filter((poi) => {
+      // 如果没有评分信息，给予通过机会（评分可能未录入）
+      if (poi.rating === undefined) return true;
+      return poi.rating >= minRating;
+    });
+  }
+
+  // 2. 如果有口味偏好，计算匹配度并排序
+  if (tastes.length > 0) {
+    const scoredPOIs = filtered.map((poi) => {
+      let matchScore = 0;
+      const poiText = [
+        poi.name,
+        poi.typeName,
+        ...(poi.tags || []),
+      ].join(' ').toLowerCase();
+
+      // 计算口味匹配度
+      for (const taste of tastes) {
+        const keywords = TASTE_KEYWORDS[taste] || [];
+        for (const keyword of keywords) {
+          if (poiText.includes(keyword.toLowerCase())) {
+            matchScore += 1;
+            break; // 每个口味只计一次
+          }
+        }
+      }
+
+      // 评分加成
+      if (poi.rating && poi.rating >= 4.0) {
+        matchScore += 0.5;
+      }
+
+      return { poi, matchScore };
+    });
+
+    // 按匹配度排序（匹配度高的优先）
+    scoredPOIs.sort((a, b) => b.matchScore - a.matchScore);
+    filtered = scoredPOIs.map((item) => item.poi);
+  } else {
+    // 没有口味偏好时，按评分排序
+    filtered.sort((a, b) => {
+      const ratingA = a.rating || 0;
+      const ratingB = b.rating || 0;
+      return ratingB - ratingA;
+    });
+  }
+
+  return filtered;
 }
 
 /** 计算所有参与者到 POI 的路线 */
