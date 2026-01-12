@@ -140,3 +140,4 @@ const ResultPanel: React.FC = memo(function ResultPanel() {
 export default ResultPanel;
 
 
+
