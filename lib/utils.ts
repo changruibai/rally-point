@@ -226,3 +226,4 @@ export function getValidCoordinates(participants: Participant[]): Coordinate[] {
 }
 
 
+
