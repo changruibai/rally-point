@@ -74,8 +74,18 @@ export async function POST(request: NextRequest) {
     // 2. 转换 POI 类型码（结合食物偏好）
     let typeCodes: string;
     
-    // 如果有菜系偏好，使用菜系类型码
-    if (foodPreferences?.cuisines && foodPreferences.cuisines.length > 0) {
+    // 检查是否选择了非餐饮类 POI（如地铁站、停车场等）
+    const nonFoodTypes = ['subway', 'parking', 'mall'];
+    const hasNonFoodType = poiTypes.some((t) => nonFoodTypes.includes(t));
+    
+    // 如果选择了非餐饮类 POI，优先使用 POI 类型码
+    if (hasNonFoodType) {
+      typeCodes = poiTypes
+        .map((t) => POI_TYPE_CODES[t] || '')
+        .filter(Boolean)
+        .join('|');
+    } else if (foodPreferences?.cuisines && foodPreferences.cuisines.length > 0) {
+      // 如果有菜系偏好，使用菜系类型码
       typeCodes = foodPreferences.cuisines
         .map((c) => CUISINE_TYPE_CODES[c] || '')
         .filter(Boolean)
@@ -91,8 +101,8 @@ export async function POST(request: NextRequest) {
     // 3. 搜索候选 POI
     let pois = await searchPOIs(center, 2000, typeCodes);
     
-    // 4. 根据饮食偏好筛选和评分 POI
-    if (foodPreferences) {
+    // 4. 根据饮食偏好筛选和评分 POI（仅对餐饮类 POI）
+    if (foodPreferences && !hasNonFoodType) {
       pois = filterAndScorePOIs(pois, foodPreferences);
     }
     if (pois.length === 0) {
@@ -382,8 +392,9 @@ async function getRoute(
 }
 
 /** 解析路线结果 */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function parseRouteResult(
-  data: { route?: { paths?: Array<{ duration?: string; distance?: string; polyline?: string }>; transits?: Array<{ cost?: { duration?: string }; distance?: string; segments?: Array<{ walking?: { steps?: Array<{ polyline?: string }> }; bus?: { buslines?: Array<{ polyline?: string }> }; railway?: { polyline?: string } }> }> } },
+  data: { route?: any },
   mode: string
 ): { duration: number; distance: number; path: Coordinate[] } {
   const route = data.route;
@@ -408,27 +419,41 @@ function parseRouteResult(
 
   const duration = parseInt(pathData.duration || '1800') / 60;
   const distance = parseInt(pathData.distance || '0');
-  const path = parsePolyline(pathData.polyline || '');
+  const polyline = pathData.polyline;
+  const path = typeof polyline === 'string' ? parsePolyline(polyline) : [];
 
   return { duration, distance, path };
 }
 
 /** 解析公交路线 */
-function parseTransitPath(transit: { segments?: Array<{ walking?: { steps?: Array<{ polyline?: string }> }; bus?: { buslines?: Array<{ polyline?: string }> }; railway?: { polyline?: string } }> }): Coordinate[] {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseTransitPath(transit: { segments?: Array<any> }): Coordinate[] {
   const path: Coordinate[] = [];
   const segments = transit.segments || [];
 
   for (const segment of segments) {
+    // 解析步行路线
     if (segment.walking?.steps) {
       for (const step of segment.walking.steps) {
-        if (step.polyline) path.push(...parsePolyline(step.polyline));
+        const polyline = step.polyline;
+        if (polyline && typeof polyline === 'string') {
+          path.push(...parsePolyline(polyline));
+        }
       }
     }
+    // 解析公交路线
     if (segment.bus?.buslines?.[0]?.polyline) {
-      path.push(...parsePolyline(segment.bus.buslines[0].polyline));
+      const polyline = segment.bus.buslines[0].polyline;
+      if (typeof polyline === 'string') {
+        path.push(...parsePolyline(polyline));
+      }
     }
+    // 解析地铁/铁路路线
     if (segment.railway?.polyline) {
-      path.push(...parsePolyline(segment.railway.polyline));
+      const polyline = segment.railway.polyline;
+      if (typeof polyline === 'string') {
+        path.push(...parsePolyline(polyline));
+      }
     }
   }
 
@@ -436,8 +461,8 @@ function parseTransitPath(transit: { segments?: Array<{ walking?: { steps?: Arra
 }
 
 /** 解析 polyline */
-function parsePolyline(polyline: string): Coordinate[] {
-  if (!polyline) return [];
+function parsePolyline(polyline: string | undefined | null): Coordinate[] {
+  if (!polyline || typeof polyline !== 'string') return [];
   return polyline.split(';')
     .map((point) => {
       const [lng, lat] = point.split(',').map(Number);
